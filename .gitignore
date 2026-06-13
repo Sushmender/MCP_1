@@ -1,0 +1,33 @@
+# Python Virtual Environments
+.venv/
+env/
+ENV/
+venv/
+bin/
+include/
+lib/
+share/
+pyvenv.cfg
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+Desktop.ini
