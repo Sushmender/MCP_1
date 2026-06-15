@@ -1,0 +1,24 @@
+{
+    "mcpServers": {
+
+        "research": {
+            "command": ".venv\\Scripts\\python.exe",
+            "args": ["research_server.py"]
+        },
+
+        "filesystem": {
+            "command": "npx.cmd",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "./papers"
+            ]
+        },
+
+        "fetch": {
+            "command": "uvx",
+            "args": ["mcp-server-fetch"]
+        }
+
+    }
+}

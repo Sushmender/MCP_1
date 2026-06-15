@@ -1,4 +1,5 @@
 import json
+import os
 from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -7,12 +8,46 @@ from app.llm import get_llm_provider
 from app.llm.base import BaseLLMProvider
 
 
+def _sanitize_schema(schema: dict) -> dict:
+    """
+    Strip JSON-Schema keywords that Groq (and some other OpenAI-compatible
+    providers) reject in function-calling payloads.
+
+    Groq's API returns HTTP 400 / tool_use_failed when the schema contains
+    keywords such as 'default', 'examples', '$schema', '$id', 'allOf',
+    'anyOf', 'oneOf', '$defs', 'additionalProperties', etc.
+
+    We recursively remove them and keep only the safe subset:
+    type, description, properties, required, items, enum.
+    """
+    ALLOWED_TOP = {"type", "description", "properties", "required", "items", "enum"}
+    if not isinstance(schema, dict):
+        return schema
+
+    cleaned = {k: v for k, v in schema.items() if k in ALLOWED_TOP}
+
+    # Recurse into properties
+    if "properties" in cleaned and isinstance(cleaned["properties"], dict):
+        cleaned["properties"] = {
+            prop_name: _sanitize_schema(prop_val)
+            for prop_name, prop_val in cleaned["properties"].items()
+        }
+
+    # Recurse into array items
+    if "items" in cleaned and isinstance(cleaned["items"], dict):
+        cleaned["items"] = _sanitize_schema(cleaned["items"])
+
+    return cleaned
+
+
 class MCPClientManager:
     def __init__(self):
         self.exit_stack = AsyncExitStack()
         self.llm: BaseLLMProvider | None = None
         self.available_tools: list[dict] = []
         self.available_prompts: list[dict] = []
+        self.available_resources: list[dict] = []   # static resources
+        self.available_resource_templates: list[dict] = []  # URI-template resources
         self.sessions: dict = {}  # maps tool/prompt names and resource URIs to sessions
 
     async def initialize(self):
@@ -23,6 +58,10 @@ class MCPClientManager:
             print(f"[LLM] Provider initialized successfully.")
         except ValueError as e:
             print(f"[Warning] {e}")
+
+        # Ensure the papers directory exists before the filesystem MCP server
+        # tries to serve it — otherwise the server process exits immediately.
+        os.makedirs("papers", exist_ok=True)
 
         await self.connect_to_servers()
 
@@ -56,7 +95,13 @@ class MCPClientManager:
                     self.available_tools.append({
                         "name": tool.name,
                         "description": tool.description,
-                        "input_schema": tool.inputSchema,
+                        # Sanitize the schema for Groq/OpenAI-compatible providers:
+                        # strip unsupported keywords that trigger 400 errors.
+                        "input_schema": _sanitize_schema(
+                            tool.inputSchema if isinstance(tool.inputSchema, dict)
+                            else tool.inputSchema.model_dump() if hasattr(tool.inputSchema, "model_dump")
+                            else dict(tool.inputSchema)
+                        ),
                     })
                 print(
                     f"Connected to '{server_name}' successfully. "
@@ -92,16 +137,43 @@ class MCPClientManager:
                     for resource in resources_response.resources:
                         resource_uri = str(resource.uri)
                         self.sessions[resource_uri] = session
+                        self.available_resources.append({
+                            "uri": resource_uri,
+                            "name": resource.name or "",
+                            "description": resource.description or "",
+                            "mime_type": resource.mimeType or "",
+                        })
                     print(f"Registered resources for '{server_name}': {[str(r.uri) for r in resources_response.resources]}")
+                else:
+                    print(f"No static resources registered for '{server_name}'.")
             except Exception as e:
                 print(f"No resources registered for {server_name}: {e}")
+
+            try:
+                templates_response = await session.list_resource_templates()
+                if templates_response and templates_response.resourceTemplates:
+                    for template in templates_response.resourceTemplates:
+                        uri_template = str(template.uriTemplate)
+                        self.sessions[uri_template] = session
+                        self.available_resource_templates.append({
+                            "uri_template": uri_template,
+                            "name": template.name or "",
+                            "description": template.description or "",
+                            "mime_type": template.mimeType or "",
+                        })
+                    print(
+                        f"Registered resource templates for '{server_name}': "
+                        f"{[str(t.uriTemplate) for t in templates_response.resourceTemplates]}"
+                    )
+            except Exception as e:
+                print(f"No resource templates registered for {server_name}: {e}")
 
         except Exception as e:
             print(f"Error connecting to {server_name}: {e}")
 
     async def connect_to_servers(self):
         try:
-            with open("server_config.json", "r") as file:
+            with open(settings.SERVER_CONFIG_PATH, "r") as file:
                 data = json.load(file)
             servers = data.get("mcpServers", {})
             for server_name, server_config in servers.items():
