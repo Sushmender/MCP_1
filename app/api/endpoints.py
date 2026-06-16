@@ -27,10 +27,22 @@ async def chat(request: Request, payload: ChatRequest):
         raise HTTPException(status_code=503, detail="MCP Client is not initialized.")
 
     try:
-        result = await mcp_client.process_query(payload.message)
+        result = await asyncio.wait_for(
+            mcp_client.process_query(payload.message),
+            timeout=settings.PROMPT_TIMEOUT_SECS,
+        )
         return ChatResponse(
             response=result["response"],
             tool_calls=result["tool_calls"],
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=408,
+            detail=(
+                f"Request timed out after {settings.PROMPT_TIMEOUT_SECS}s. "
+                "Paper searches involve multiple LLM + ArXiv calls — try a simpler query "
+                "or increase PROMPT_TIMEOUT_SECS in your .env file."
+            ),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing chat query: {str(e)}")

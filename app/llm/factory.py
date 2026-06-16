@@ -8,8 +8,9 @@ def get_llm_provider() -> BaseLLMProvider:
     appropriate provider instance.
 
     Supported values for LLM_PROVIDER:
-      - "anthropic"  →  AnthropicProvider (default)
+      - "cerebras"   →  CerebrasProvider  (default)
       - "groq"       →  GroqProvider
+      - "anthropic"  →  AnthropicProvider
 
     Raises:
         ValueError: If LLM_PROVIDER is set to an unsupported value.
@@ -17,16 +18,16 @@ def get_llm_provider() -> BaseLLMProvider:
     """
     provider = settings.LLM_PROVIDER.lower().strip()
 
-    if provider == "anthropic":
-        from app.llm.anthropic_provider import AnthropicProvider
-        if not settings.ANTHROPIC_API_KEY or settings.ANTHROPIC_API_KEY == "your_anthropic_api_key_here":
+    if provider == "cerebras":
+        from app.llm.cerebras_provider import CerebrasProvider
+        if not settings.CEREBRAS_API_KEY or settings.CEREBRAS_API_KEY == "your_cerebras_api_key_here":
             raise ValueError(
-                "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set. "
+                "LLM_PROVIDER=cerebras but CEREBRAS_API_KEY is not set. "
                 "Add it to your .env file."
             )
-        return AnthropicProvider(
-            api_key=settings.ANTHROPIC_API_KEY,
-            model=settings.ANTHROPIC_MODEL,
+        return CerebrasProvider(
+            api_key=settings.CEREBRAS_API_KEY,
+            model=settings.CEREBRAS_MODEL,
         )
 
     if provider == "groq":
@@ -41,7 +42,19 @@ def get_llm_provider() -> BaseLLMProvider:
             model=settings.GROQ_MODEL,
         )
 
+    if provider == "anthropic":
+        from app.llm.anthropic_provider import AnthropicProvider
+        if not settings.ANTHROPIC_API_KEY or settings.ANTHROPIC_API_KEY == "your_anthropic_api_key_here":
+            raise ValueError(
+                "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set. "
+                "Add it to your .env file."
+            )
+        return AnthropicProvider(
+            api_key=settings.ANTHROPIC_API_KEY,
+            model=settings.ANTHROPIC_MODEL,
+        )
+
     raise ValueError(
         f"Unsupported LLM_PROVIDER='{provider}'. "
-        "Supported values: 'anthropic', 'groq'."
+        "Supported values: 'cerebras', 'groq', 'anthropic'."
     )

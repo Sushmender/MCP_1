@@ -51,8 +51,15 @@ class MCPClientManager:
         self.sessions: dict = {}  # maps tool/prompt names and resource URIs to sessions
 
     async def initialize(self):
-        """Initialize the chosen LLM provider and connect to all MCP servers."""
-        print(f"[LLM] Provider: {settings.LLM_PROVIDER.upper()}")
+        """Initialize the configured LLM provider and connect to all MCP servers."""
+        provider = settings.LLM_PROVIDER.upper()
+        model_map = {
+            "cerebras": settings.CEREBRAS_MODEL,
+            "groq": settings.GROQ_MODEL,
+            "anthropic": settings.ANTHROPIC_MODEL,
+        }
+        model = model_map.get(settings.LLM_PROVIDER.lower(), "unknown")
+        print(f"[LLM] Provider: {provider}  |  Model: {model}")
         try:
             self.llm = get_llm_provider()
             print(f"[LLM] Provider initialized successfully.")
@@ -95,8 +102,8 @@ class MCPClientManager:
                     self.available_tools.append({
                         "name": tool.name,
                         "description": tool.description,
-                        # Sanitize the schema for Groq/OpenAI-compatible providers:
-                        # strip unsupported keywords that trigger 400 errors.
+                        # Sanitize the schema: strip unsupported JSON-Schema keywords
+                        # that can cause 400 errors with OpenAI-compatible endpoints.
                         "input_schema": _sanitize_schema(
                             tool.inputSchema if isinstance(tool.inputSchema, dict)
                             else tool.inputSchema.model_dump() if hasattr(tool.inputSchema, "model_dump")
@@ -129,7 +136,8 @@ class MCPClientManager:
                         })
                     print(f"Registered prompts for '{server_name}': {[p.name for p in prompts_response.prompts]}")
             except Exception as e:
-                print(f"No prompts registered for {server_name}: {e}")
+                if "Method not found" not in str(e):
+                    print(f"[Warning] Could not list prompts for '{server_name}': {e}")
 
             try:
                 resources_response = await session.list_resources()
@@ -144,10 +152,9 @@ class MCPClientManager:
                             "mime_type": resource.mimeType or "",
                         })
                     print(f"Registered resources for '{server_name}': {[str(r.uri) for r in resources_response.resources]}")
-                else:
-                    print(f"No static resources registered for '{server_name}'.")
             except Exception as e:
-                print(f"No resources registered for {server_name}: {e}")
+                if "Method not found" not in str(e):
+                    print(f"[Warning] Could not list resources for '{server_name}': {e}")
 
             try:
                 templates_response = await session.list_resource_templates()
@@ -166,7 +173,8 @@ class MCPClientManager:
                         f"{[str(t.uriTemplate) for t in templates_response.resourceTemplates]}"
                     )
             except Exception as e:
-                print(f"No resource templates registered for {server_name}: {e}")
+                if "Method not found" not in str(e):
+                    print(f"[Warning] Could not list resource templates for '{server_name}': {e}")
 
         except Exception as e:
             print(f"Error connecting to {server_name}: {e}")
