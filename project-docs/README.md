@@ -57,6 +57,14 @@ MCP_1/
 │       └── chat.py          # Pydantic request/response models
 ├── research_server.py       # Custom MCP server (tools, resources, prompts)
 ├── server_config.json       # MCP server process definitions
+├── project-docs/            # Frontend integration documentation
+│   ├── API-CONTRACT.md      # All endpoints documented in full
+│   ├── SYSTEM-ARCHITECTURE.md # High-level design document
+│   ├── AUTHENTICATION.md    # Auth status and recommendations
+│   ├── BUSINESS-FLOWS.md    # User workflow documentation
+│   ├── ERROR-HANDLING.md    # Error reference for frontend
+│   ├── FRONTEND-HANDOFF.md  # React developer guide
+│   └── README.md            # This file (copy of root README)
 ├── papers/                  # Auto-created; stores downloaded paper metadata
 │   └── <topic>/
 │       └── papers_info.json
@@ -307,3 +315,18 @@ PROMPT_TIMEOUT_SECS=600
 ```
 
 **Papers are cached locally** in `papers/<topic>/papers_info.json`. Subsequent queries for the same topic are faster since metadata is already on disk.
+
+---
+
+## 📚 Frontend Integration Documentation
+
+The `project-docs/` folder contains comprehensive documentation for frontend developers:
+
+| Document | Description |
+|----------|-------------|
+| [API-CONTRACT.md](./API-CONTRACT.md) | Every endpoint with full request/response schemas and examples |
+| [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) | High-level system design and component breakdown |
+| [AUTHENTICATION.md](./AUTHENTICATION.md) | Auth status (no auth required) and recommendations |
+| [BUSINESS-FLOWS.md](./BUSINESS-FLOWS.md) | User workflows with API calls and backend processing |
+| [ERROR-HANDLING.md](./ERROR-HANDLING.md) | All error codes, formats, and frontend handling strategies |
+| [FRONTEND-HANDOFF.md](./FRONTEND-HANDOFF.md) | React developer guide: pages, state, API client setup |
