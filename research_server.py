@@ -1,6 +1,8 @@
 import arxiv
+import httpx
 import json
 import os
+import re
 from typing import List
 from mcp.server.fastmcp import FastMCP
 
@@ -83,6 +85,72 @@ def search_papers(topic: str, max_results: int = 5) -> List[str]:
 
     print(f"Results saved in: {file_path}")
     return paper_ids
+
+
+@mcp.tool()
+def fetch_url(url: str, max_chars: int = 8000) -> str:
+    """
+    Fetch the content of any publicly accessible URL and return its text.
+
+    Makes a real HTTP GET request to the given URL, strips HTML markup, and
+    returns up to ``max_chars`` characters of the resulting plain text so the
+    LLM can read and reason about the actual page content.
+
+    Args:
+        url: The full URL to fetch (e.g. "https://example.com/article").
+        max_chars: Maximum number of characters to return (default: 8000).
+                   Keeps responses within typical LLM context limits.
+
+    Returns:
+        Plain-text content of the page (truncated if necessary), or an
+        error message describing why the fetch failed.
+    """
+    # Basic sanity-check: only allow http/https
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        return f"Error: Only http:// and https:// URLs are supported. Got: {url!r}"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (compatible; MCPResearchBot/1.0; +https://github.com/Sushmender/MCP_1)"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    }
+
+    try:
+        with httpx.Client(follow_redirects=True, timeout=20.0) as client:
+            response = client.get(url, headers=headers)
+        response.raise_for_status()
+    except httpx.TimeoutException:
+        return f"Error: Request timed out after 20 seconds while fetching {url!r}."
+    except httpx.HTTPStatusError as exc:
+        return f"Error: HTTP {exc.response.status_code} when fetching {url!r}."
+    except httpx.RequestError as exc:
+        return f"Error: Network error fetching {url!r} — {exc}."
+
+    raw = response.text
+
+    # ── Strip HTML ──────────────────────────────────────────────────────────
+    # Remove <script> and <style> blocks entirely
+    raw = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", raw, flags=re.DOTALL | re.IGNORECASE)
+    # Remove all remaining tags
+    raw = re.sub(r"<[^>]+>", " ", raw)
+    # Decode common HTML entities
+    raw = (
+        raw.replace("&amp;", "&")
+           .replace("&lt;", "<")
+           .replace("&gt;", ">")
+           .replace("&quot;", '"')
+           .replace("&#39;", "'")
+           .replace("&nbsp;", " ")
+    )
+    # Collapse whitespace
+    text = re.sub(r"[ \t]+", " ", raw)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    if len(text) > max_chars:
+        text = text[:max_chars] + f"\n\n[… content truncated at {max_chars} characters …]"
+
+    return text if text else "(Page fetched successfully but no readable text was found.)"
 
 
 @mcp.tool()
